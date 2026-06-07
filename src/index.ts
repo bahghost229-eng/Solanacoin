@@ -161,8 +161,12 @@ async function main(): Promise<void> {
       }
       positions.openFromBuy(buy, event.symbol, event.source);
     } catch (err) {
-      logger.error(SCOPE, `Erreur traitement ${mint}`, {
-        error: (err as Error)?.message,
+      const e = err as Error;
+      // Erreur par-token = souvent bénigne (mint illisible, token déjà migré,
+      // RPC ponctuel). On log en warn pour NE PAS spammer les alertes Telegram.
+      logger.warn(SCOPE, `Token ${mint} ignoré (traitement échoué)`, {
+        error: e?.message || String(err),
+        stack: e?.stack?.split('\n').slice(0, 3).join(' | '),
       });
     }
   };

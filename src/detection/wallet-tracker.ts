@@ -85,7 +85,7 @@ export class WalletTracker extends EventEmitter {
       try {
         this.processPayload(payload);
       } catch (err) {
-        logger.error(SCOPE, 'Erreur traitement webhook', {
+        logger.warn(SCOPE, 'Erreur traitement webhook', {
           error: (err as Error)?.message,
         });
       }
