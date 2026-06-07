@@ -7,3 +7,6 @@ data/trades.json
 data/positions.json
 .DS_Store
 data/store.json
+
+.env.git
+.env.*

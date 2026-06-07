@@ -18,16 +18,24 @@ export class RpcManager {
   readonly heliusWsUrl: string;
 
   constructor(secrets: Secrets, commitment: Commitment = 'confirmed') {
+    if (!secrets.heliusApiKey) {
+      logger.warn('rpc', 'HELIUS_API_KEY manquante — la détection temps réel ne fonctionnera pas.');
+    }
+
     this.heliusHttpUrl = `https://mainnet.helius-rpc.com/?api-key=${secrets.heliusApiKey}`;
     this.heliusWsUrl = `wss://mainnet.helius-rpc.com/?api-key=${secrets.heliusApiKey}`;
 
     this.primary = new Connection(this.heliusHttpUrl, { commitment });
-    this.fallback = secrets.fluxRpcUrl
-      ? new Connection(secrets.fluxRpcUrl, { commitment })
-      : null;
 
-    if (!secrets.heliusApiKey) {
-      logger.warn('rpc', 'HELIUS_API_KEY manquante — la détection temps réel ne fonctionnera pas.');
+    // Fallback FluxRPC : uniquement si une URL http(s) VALIDE est fournie.
+    // On ignore les placeholders / valeurs invalides pour ne pas crasher au boot.
+    const flux = (secrets.fluxRpcUrl ?? '').trim();
+    const isValidHttpUrl =
+      /^https?:\/\//i.test(flux) && !/your-fluxrpc-endpoint|example\.com/i.test(flux);
+    this.fallback = isValidHttpUrl ? new Connection(flux, { commitment }) : null;
+
+    if (flux && !isValidHttpUrl) {
+      logger.warn('rpc', 'FLUXRPC_URL invalide ou placeholder — fallback désactivé.', { value: flux });
     }
   }
 
