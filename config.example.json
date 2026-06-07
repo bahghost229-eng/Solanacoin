@@ -116,7 +116,12 @@
     "freshWalletMaxTx": 5,
     "//freshWalletMaxTx": "Wallet 'fresh' si <= N transactions au financement",
     "minSuspicionScore": 50,
-    "//minSuspicionScore": "Score (0-100) à partir duquel un dev est marqué suspect"
+    "//minSuspicionScore": "Score (0-100) à partir duquel un dev est marqué suspect",
+    "launchFundingMinSol": 8,
+    "launchFundingMaxSol": 12,
+    "//launchFunding": "Fourchette SOL typique d'un financement de création de token (hub -> wallet de launch)",
+    "serialHubMinLaunches": 2,
+    "//serialHubMinLaunches": "Nb min de wallets financés en 8-12 SOL par le hub pour le qualifier de sérial launcher"
   },
 
   "copyTrade": {

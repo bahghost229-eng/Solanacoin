@@ -36,6 +36,10 @@ export interface DevPatternReport {
   signals: PatternSignal[];
   /** Autres wallets financés par la même racine (siblings = autres launches potentiels). */
   siblings: string[];
+  /** Hub distributeur direct (Wallet C) — le financeur le plus proche du dev. */
+  hub?: string;
+  /** Wallets financés par le hub dans la fourchette de launch (chacun = un launch probable). */
+  launchSiblings: { wallet: string; amountSol: number }[];
 }
 
 export class DevPatternAnalyzer {
@@ -73,29 +77,53 @@ export class DevPatternAnalyzer {
 
     // 3. Financement par un wallet mère qui alimente plusieurs wallets (siblings)
     let siblings: string[] = [];
+    let hub: string | undefined;
+    let launchSiblings: { wallet: string; amountSol: number }[] = [];
     if (chain.rootFunder) {
       siblings = await this.findSiblings(chain.rootFunder, wallet);
       const hasSiblings = siblings.length >= 1;
       signals.push({
         name: 'mother-wallet-multi-fund',
         hit: hasSiblings,
-        weight: 35,
+        weight: 20,
         detail: hasSiblings
           ? `Financeur alimente ${siblings.length} autre(s) wallet(s) (launches potentiels)`
           : 'Financeur sans autres bénéficiaires détectés',
       });
     }
 
-    // 4. Montant de financement "rond" / régulier (heuristique)
-    const roundFunding = chain.hops.some((h) => isRoundAmount(h.amountSol));
+    // 4. Montant de financement dans la fourchette de LAUNCH (ex: 8-12 SOL)
+    // C'est la signature décrite : le hub envoie un montant quasi-fixe au wallet
+    // qui va créer le token.
+    const { launchFundingMinSol: lo, launchFundingMaxSol: hi } = this.cfg;
+    const launchFunding = chain.hops.find(
+      (h) => h.amountSol >= lo && h.amountSol <= hi,
+    );
     signals.push({
-      name: 'regular-funding-amount',
-      hit: roundFunding,
-      weight: 15,
-      detail: roundFunding
-        ? 'Montant de financement rond/régulier détecté'
-        : 'Pas de montant régulier évident',
+      name: 'launch-funding-amount',
+      hit: !!launchFunding,
+      weight: 20,
+      detail: launchFunding
+        ? `Financement ${launchFunding.amountSol.toFixed(2)} SOL dans la fourchette de launch (${lo}-${hi})`
+        : `Aucun financement dans la fourchette de launch (${lo}-${hi} SOL)`,
     });
+
+    // 5. HUB SÉRIAL : le financeur direct (Wallet C) distribue des montants
+    // 8-12 SOL à PLUSIEURS wallets frais → machine à launch récurrente.
+    // On prend le financeur le plus proche (hop 0) comme hub candidat.
+    hub = chain.hops[0]?.from;
+    if (hub) {
+      launchSiblings = await this.findLaunchFunded(hub, lo, hi);
+      const isSerialHub = launchSiblings.length >= this.cfg.serialHubMinLaunches;
+      signals.push({
+        name: 'serial-launch-hub',
+        hit: isSerialHub,
+        weight: 30,
+        detail: isSerialHub
+          ? `Hub ${shortAddr(hub)} a financé ${launchSiblings.length} wallets en ${lo}-${hi} SOL (sérial launcher)`
+          : `Hub ${shortAddr(hub)} : ${launchSiblings.length} financement(s) de launch détecté(s)`,
+      });
+    }
 
     const score = Math.min(
       100,
@@ -117,7 +145,46 @@ export class DevPatternAnalyzer {
       suspicious,
       signals,
       siblings,
+      hub,
+      launchSiblings,
     };
+  }
+
+  /**
+   * Trouve les wallets financés par `hub` avec un montant dans la fourchette
+   * de launch [lo, hi] SOL. Chacun est un candidat "wallet qui va créer un token".
+   * C'est le cœur de la détection du hub sérial (Wallet C de la cascade).
+   */
+  private async findLaunchFunded(
+    hub: string,
+    lo: number,
+    hi: number,
+  ): Promise<{ wallet: string; amountSol: number }[]> {
+    const found = new Map<string, number>();
+    try {
+      const sigs = await this.rpc.execute(
+        (conn) => conn.getSignaturesForAddress(new PublicKey(hub), { limit: 80 }),
+        SCOPE,
+      );
+      for (const s of sigs) {
+        const tx = await this.rpc.execute(
+          (conn) =>
+            conn.getTransaction(s.signature, {
+              maxSupportedTransactionVersion: 0,
+              commitment: 'confirmed',
+            }),
+          SCOPE,
+        );
+        if (!tx || !tx.meta) continue;
+        for (const [addr, amt] of debitedTransfers(tx, hub)) {
+          if (amt >= lo && amt <= hi && !found.has(addr)) found.set(addr, amt);
+        }
+        if (found.size >= 15) break;
+      }
+    } catch {
+      /* ignore */
+    }
+    return [...found.entries()].map(([wallet, amountSol]) => ({ wallet, amountSol }));
   }
 
   private async txCount(wallet: string): Promise<number> {
@@ -168,10 +235,30 @@ export class DevPatternAnalyzer {
   }
 }
 
-/** Montant "rond" : proche d'un multiple de 0.5 SOL (heuristique simple). */
-function isRoundAmount(sol: number): boolean {
-  const r = Math.round(sol * 2) / 2;
-  return Math.abs(sol - r) < 0.02 && sol >= 0.5;
+const LAMPORTS = 1_000_000_000;
+
+/** Bénéficiaires + montant (SOL) reçu, quand `funder` débite dans la tx. */
+function debitedTransfers(tx: any, funder: string): [string, number][] {
+  const out: [string, number][] = [];
+  try {
+    const keys: string[] = (
+      tx.transaction.message.staticAccountKeys ??
+      tx.transaction.message.accountKeys ??
+      []
+    ).map((k: any) => (typeof k === 'string' ? k : k.toBase58?.() ?? String(k)));
+    const pre: number[] = tx.meta.preBalances;
+    const post: number[] = tx.meta.postBalances;
+    const fIdx = keys.indexOf(funder);
+    if (fIdx < 0 || post[fIdx] - pre[fIdx] >= 0) return out; // le funder doit débiter
+    for (let i = 0; i < keys.length; i++) {
+      if (i === fIdx) continue;
+      const delta = (post[i] - pre[i]) / LAMPORTS;
+      if (delta > 0) out.push([keys[i], delta]);
+    }
+  } catch {
+    /* ignore */
+  }
+  return out;
 }
 
 /** Comptes qui ont REÇU du SOL du `funder` dans une transaction. */

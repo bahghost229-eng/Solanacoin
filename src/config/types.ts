@@ -96,6 +96,11 @@ export interface DevPatternConfig {
   freshWalletMaxTx: number;
   /** Score minimum (0-100) pour considérer un dev comme "suspect/à sniper". */
   minSuspicionScore: number;
+  /** Fourchette (SOL) typique d'un financement de création de token (ex: 8-12). */
+  launchFundingMinSol: number;
+  launchFundingMaxSol: number;
+  /** Nb min de wallets financés dans la fourchette pour qualifier un "hub sérial launcher". */
+  serialHubMinLaunches: number;
 }
 
 export interface CopyTradeConfig {

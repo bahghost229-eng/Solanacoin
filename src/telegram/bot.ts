@@ -321,16 +321,28 @@ export class TelegramController {
         const sig = r.signals
           .map((s) => `${s.hit ? '✅' : '⬜'} ${s.name} (${s.weight}) — ${s.detail}`)
           .join('\n');
+        const launchLines = r.launchSiblings.length
+          ? [
+              '',
+              `🏭 *Hub sérial* \`${r.hub ? shortAddr(r.hub) : 'n/a'}\``,
+              `A financé ${r.launchSiblings.length} wallet(s) en montant de launch :`,
+              ...r.launchSiblings
+                .slice(0, 8)
+                .map((s) => `  • \`${shortAddr(s.wallet)}\` ← ${s.amountSol.toFixed(2)} SOL`),
+            ]
+          : [];
         this.reply(
           chatId,
           [
             `🔬 *Pattern dev* \`${shortAddr(wallet)}\``,
             `Score : *${r.score}/100* ${r.suspicious ? '⚠️ SUSPECT' : '✅ ok'}`,
             r.rootFunder ? `Financeur racine : \`${shortAddr(r.rootFunder)}\`` : 'Financeur racine : n/a',
+            r.hub ? `Hub distributeur : \`${shortAddr(r.hub)}\`` : '',
             `Siblings (autres launches potentiels) : ${r.siblings.length}`,
+            ...launchLines,
             '',
             sig,
-          ].join('\n'),
+          ].filter(Boolean).join('\n'),
         );
       } catch (e) {
         this.reply(chatId, `❌ Erreur analyse : ${(e as Error)?.message}`);
