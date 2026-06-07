@@ -28,6 +28,7 @@ export class PumpFunListener extends EventEmitter {
   private subId: number | null = null;
   private reconnectAttempts = 0;
   private stopped = false;
+  private authFailed = false;
   private pingTimer: NodeJS.Timeout | null = null;
   private seenSignatures = new Set<string>();
 
@@ -68,7 +69,17 @@ export class PumpFunListener extends EventEmitter {
     });
 
     this.ws.on('error', (err) => {
-      logger.error(SCOPE, 'Erreur WebSocket', { error: (err as Error)?.message });
+      const m = (err as Error)?.message || String(err);
+      if (m.includes('401')) {
+        // Clé Helius invalide/expirée : retry agressif inutile.
+        this.authFailed = true;
+        logger.error(
+          SCOPE,
+          'WebSocket Helius refusé (401) — HELIUS_API_KEY invalide ou expirée. Mets une clé valide dans les variables Railway.',
+        );
+      } else {
+        logger.error(SCOPE, `Erreur WebSocket: ${m}`);
+      }
       // 'close' suivra et déclenchera la reconnexion.
     });
   }
@@ -97,7 +108,11 @@ export class PumpFunListener extends EventEmitter {
     if (this.stopped) return;
     if (this.pingTimer) clearInterval(this.pingTimer);
     this.reconnectAttempts++;
-    const delay = Math.min(1000 * 2 ** this.reconnectAttempts, 30_000);
+    // Sur échec d'auth (401), on espace fortement les tentatives (clé morte) :
+    // 5 min fixe au lieu du backoff exponentiel, pour ne pas marteler.
+    const delay = this.authFailed
+      ? 5 * 60_000
+      : Math.min(1000 * 2 ** this.reconnectAttempts, 30_000);
     logger.warn(SCOPE, `Reconnexion dans ${delay}ms (tentative ${this.reconnectAttempts})`);
     setTimeout(() => !this.stopped && this.connect(), delay);
   }

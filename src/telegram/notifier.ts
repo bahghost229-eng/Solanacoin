@@ -27,6 +27,7 @@ export interface NotifierOptions {
 
 export class Notifier {
   private lastSnapshotTs = 0;
+  private errorAlertAt = new Map<string, number>();
 
   constructor(
     private send: SendFn,
@@ -40,9 +41,16 @@ export class Notifier {
     }
     if (this.opts.alertErrors) {
       logBus.on('log', (e: { level: string; scope: string; msg: string }) => {
-        if (e.level === 'error') {
-          this.alert(`🔴 *Erreur* (${e.scope})\n${e.msg}`);
-        }
+        if (e.level !== 'error') return;
+        // Anti-spam : 1 alerte max par (scope+msg) toutes les 5 min.
+        // Évite l'inondation quand un WS reconnecte en boucle.
+        const key = `${e.scope}:${e.msg}`;
+        const now = Date.now();
+        const last = this.errorAlertAt.get(key) ?? 0;
+        if (now - last < 5 * 60_000) return;
+        this.errorAlertAt.set(key, now);
+        if (this.errorAlertAt.size > 200) this.errorAlertAt.clear();
+        this.alert(`🔴 *Erreur* (${e.scope})\n${e.msg}`);
       });
     }
   }
