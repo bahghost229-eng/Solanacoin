@@ -16,7 +16,6 @@ RUN npm install typescript@5 && ./node_modules/.bin/tsc && npm prune --omit=dev
 
 # Données persistantes (store, positions, logs). Sur Railway, monte un volume sur /app/data.
 RUN mkdir -p /app/data
-VOLUME ["/app/data"]
 
 # config.json optionnel : si absent, le bot utilise config.example.json.
 # Les secrets viennent des variables d'environnement Railway (voir README).
