@@ -45,6 +45,15 @@ export function loadConfig(): BotConfig {
   }
 
   const config = readJsonStripComments<BotConfig>(path);
+
+  // Override par variable d'environnement (Railway) sans rebuild :
+  // DETECTION_ENABLED=false coupe le scan global Pump.fun (économise les crédits Helius).
+  // On ne garde alors que la surveillance des wallets ajoutés.
+  const detEnv = process.env.DETECTION_ENABLED;
+  if (detEnv !== undefined) {
+    config.detection.enabled = detEnv.toLowerCase() === 'true' || detEnv === '1';
+  }
+
   validateConfig(config);
   return config;
 }

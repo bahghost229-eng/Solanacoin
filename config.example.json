@@ -7,7 +7,8 @@
   "network": "mainnet-beta",
 
   "detection": {
-    "enabled": true,
+    "enabled": false,
+    "//enabled": "false = pas de scan global Pump.fun (économise les crédits Helius). On ne surveille que les wallets ajoutés via walletTracking. Override possible avec DETECTION_ENABLED=true/false.",
     "source": "pumpfun",
     "//source": "pumpfun = écoute les nouveaux mints du programme Pump.fun via Helius WS",
     "filters": {

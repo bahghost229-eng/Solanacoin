@@ -191,6 +191,12 @@ async function main(): Promise<void> {
     pumpListener = new PumpFunListener(rpc);
     pumpListener.on('newToken', handleNewToken);
     pumpListener.start();
+    logger.info(SCOPE, '🔍 Scan global Pump.fun ACTIVÉ (consomme des crédits Helius).');
+  } else {
+    logger.info(
+      SCOPE,
+      '💤 Scan global Pump.fun DÉSACTIVÉ — surveillance limitée aux wallets ajoutés (économie de crédits).',
+    );
   }
 
   // --- Wallet tracking → copy-trade + snipe ---
