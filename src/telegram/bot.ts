@@ -97,11 +97,74 @@ export class TelegramController {
     return this.adminIds.has(chatId);
   }
 
-  private reply(chatId: number, msg: string): void {
+  private reply(chatId: number, msg: string, keyboard?: TelegramBot.InlineKeyboardMarkup): void {
     this.bot?.sendMessage(chatId, msg, {
       parse_mode: 'Markdown',
       disable_web_page_preview: true,
+      ...(keyboard ? { reply_markup: keyboard } : {}),
     }).catch((e) => logger.debug(SCOPE, 'sendMessage échec', { error: e?.message }));
+  }
+
+  /** Clavier principal — boutons d'action rapide. */
+  private mainKeyboard(): TelegramBot.InlineKeyboardMarkup {
+    const st = this.deps.store.getState();
+    const dryRun = st.dryRunOverride ?? this.deps.config.dryRun;
+    const paused = st.paused;
+    return {
+      inline_keyboard: [
+        [
+          { text: '📟 Statut', callback_data: 'status' },
+          { text: '👛 Wallets', callback_data: 'wallets' },
+        ],
+        [
+          { text: '📈 Positions', callback_data: 'positions' },
+          { text: '📊 PnL', callback_data: 'pnl' },
+        ],
+        [
+          { text: paused ? '▶️ Reprendre' : '⏸️ Pause', callback_data: paused ? 'resume' : 'pause' },
+          { text: dryRun ? '🔴 Passer LIVE' : '🧪 Passer DRY-RUN', callback_data: dryRun ? 'dryrun_off' : 'dryrun_on' },
+        ],
+        [
+          { text: '➕ Aide /add', callback_data: 'help_add' },
+          { text: '🔄 Rafraîchir', callback_data: 'status' },
+        ],
+      ],
+    };
+  }
+
+  private statusText(): string {
+    const { store, positions } = this.deps;
+    const st = store.getState();
+    const dryRun = st.dryRunOverride ?? this.deps.config.dryRun;
+    const amount = st.buyAmountOverride ?? this.deps.config.execution.buyAmountSol;
+    return [
+      '📟 *Statut*',
+      `Mode : ${dryRun ? '🧪 DRY-RUN' : '🔴 LIVE'}`,
+      `Sniping : ${st.paused ? '⏸️ EN PAUSE' : '▶️ ACTIF'}`,
+      `Wallets suivis : ${store.listWallets().length}`,
+      `Montant/achat : ${amount} SOL`,
+      `Positions ouvertes : ${positions.openCount}`,
+    ].join('\n');
+  }
+
+  private walletsText(): string {
+    const ws = this.deps.store.listWallets();
+    if (!ws.length) return 'Aucun wallet suivi. Ajoute-en avec /add <addr> [label].';
+    const lines = ws.map(
+      (w, i) =>
+        `${i + 1}. \`${shortAddr(w.address)}\`${w.label ? ` — ${w.label}` : ''}${w.copyTrade ? ' 🔁' : ''}\n   ${SOLSCAN(w.address)}`,
+    );
+    return `👛 *Wallets suivis (${ws.length})*\n\n${lines.join('\n')}`;
+  }
+
+  private positionsText(): string {
+    const open = this.deps.positions.getPositions().filter((p) => p.status === 'open');
+    if (!open.length) return 'Aucune position ouverte.';
+    const lines = open.map((p) => {
+      const gain = p.entryPrice > 0 ? ((p.currentPrice - p.entryPrice) / p.entryPrice) * 100 : 0;
+      return `• \`${shortAddr(p.mint)}\`${p.symbol ? ` (${p.symbol})` : ''} — ${p.investedSol.toFixed(3)} SOL — ${gain >= 0 ? '+' : ''}${gain.toFixed(1)}%`;
+    });
+    return `📈 *Positions ouvertes (${open.length})*\n${lines.join('\n')}`;
   }
 
   private registerCommands(): void {
@@ -124,54 +187,33 @@ export class TelegramController {
           `Ton chat ID : \`${chatId}\``,
           '(ajoute-le à `TELEGRAM_ADMIN_CHAT_IDS` pour piloter le bot)',
           '',
-          '*Commandes*',
-          '/status — état du bot',
-          '/wallets — wallets suivis',
+          'Utilise les *boutons* ci-dessous, ou tape une commande :',
           '/add <addr> [label] — suivre un wallet',
           '/remove <addr> — retirer',
-          '/pause /resume — sniping on/off',
-          '/dryrun on|off — simulation/live',
           '/buyamount <sol> — montant par achat',
-          '/positions — positions ouvertes',
-          '/pnl — profits & pertes',
           '/analyze <wallet> — pattern de dev',
           '/chain <wallet> — chaîne de financement',
         ].join('\n'),
+        this.mainKeyboard(),
       );
+    });
+
+    bot.onText(/^\/menu\b/, (m) => {
+      const chatId = m.chat.id;
+      if (!guard(chatId)) return;
+      this.reply(chatId, '⚡ *Menu* — choisis une action :', this.mainKeyboard());
     });
 
     bot.onText(/^\/status\b/, (m) => {
       const chatId = m.chat.id;
       if (!guard(chatId)) return;
-      const st = store.getState();
-      const dryRun = st.dryRunOverride ?? this.deps.config.dryRun;
-      const amount = st.buyAmountOverride ?? this.deps.config.execution.buyAmountSol;
-      this.reply(
-        chatId,
-        [
-          '📟 *Statut*',
-          `Mode : ${dryRun ? '🧪 DRY-RUN' : '🔴 LIVE'}`,
-          `Sniping : ${st.paused ? '⏸️ EN PAUSE' : '▶️ ACTIF'}`,
-          `Wallets suivis : ${store.listWallets().length}`,
-          `Montant/achat : ${amount} SOL`,
-          `Positions ouvertes : ${positions.openCount}`,
-        ].join('\n'),
-      );
+      this.reply(chatId, this.statusText(), this.mainKeyboard());
     });
 
     bot.onText(/^\/wallets\b/, (m) => {
       const chatId = m.chat.id;
       if (!guard(chatId)) return;
-      const ws = store.listWallets();
-      if (!ws.length) {
-        this.reply(chatId, 'Aucun wallet suivi. Ajoute-en avec /add <addr> [label].');
-        return;
-      }
-      const lines = ws.map(
-        (w, i) =>
-          `${i + 1}. \`${shortAddr(w.address)}\`${w.label ? ` — ${w.label}` : ''}${w.copyTrade ? ' 🔁' : ''}\n   ${SOLSCAN(w.address)}`,
-      );
-      this.reply(chatId, `👛 *Wallets suivis (${ws.length})*\n\n${lines.join('\n')}`);
+      this.reply(chatId, this.walletsText(), this.mainKeyboard());
     });
 
     bot.onText(/^\/add\s+(\S+)(?:\s+(.+))?$/, (m, match) => {
@@ -186,7 +228,7 @@ export class TelegramController {
       const ok = store.addWallet(addr, label, true);
       if (ok) {
         this.deps.onWalletsChanged();
-        this.reply(chatId, `✅ Wallet ajouté : \`${shortAddr(addr)}\`${label ? ` (${label})` : ''}`);
+        this.reply(chatId, `✅ Wallet ajouté : \`${shortAddr(addr)}\`${label ? ` (${label})` : ''}`, this.mainKeyboard());
       } else {
         this.reply(chatId, 'ℹ️ Ce wallet est déjà suivi.');
       }
@@ -252,23 +294,13 @@ export class TelegramController {
     bot.onText(/^\/positions\b/, (m) => {
       const chatId = m.chat.id;
       if (!guard(chatId)) return;
-      const open = positions.getPositions().filter((p) => p.status === 'open');
-      if (!open.length) {
-        this.reply(chatId, 'Aucune position ouverte.');
-        return;
-      }
-      const lines = open.map((p) => {
-        const gain =
-          p.entryPrice > 0 ? ((p.currentPrice - p.entryPrice) / p.entryPrice) * 100 : 0;
-        return `• \`${shortAddr(p.mint)}\`${p.symbol ? ` (${p.symbol})` : ''} — ${p.investedSol.toFixed(3)} SOL — ${gain >= 0 ? '+' : ''}${gain.toFixed(1)}%`;
-      });
-      this.reply(chatId, `📈 *Positions ouvertes (${open.length})*\n${lines.join('\n')}`);
+      this.reply(chatId, this.positionsText(), this.mainKeyboard());
     });
 
     bot.onText(/^\/pnl\b/, (m) => {
       const chatId = m.chat.id;
       if (!guard(chatId)) return;
-      this.reply(chatId, Notifier.formatPnl(positions.snapshot()));
+      this.reply(chatId, Notifier.formatPnl(positions.snapshot()), this.mainKeyboard());
     });
 
     bot.onText(/^\/analyze\s+(\S+)/, async (m, match) => {
@@ -339,6 +371,78 @@ export class TelegramController {
         );
       } catch (e) {
         this.reply(chatId, `❌ Erreur chaîne : ${(e as Error)?.message}`);
+      }
+    });
+
+    // --- Boutons inline (callback_query) ---
+    bot.on('callback_query', async (q) => {
+      const chatId = q.message?.chat.id;
+      const data = q.data ?? '';
+      if (!chatId) return;
+      // ack pour retirer le "chargement" sur le bouton
+      bot.answerCallbackQuery(q.id).catch(() => {});
+
+      if (!this.authorized(chatId)) {
+        this.reply(chatId, '⛔ Non autorisé.');
+        return;
+      }
+
+      switch (data) {
+        case 'status':
+          this.reply(chatId, this.statusText(), this.mainKeyboard());
+          break;
+        case 'wallets':
+          this.reply(chatId, this.walletsText(), this.mainKeyboard());
+          break;
+        case 'positions':
+          this.reply(chatId, this.positionsText(), this.mainKeyboard());
+          break;
+        case 'pnl':
+          this.reply(chatId, Notifier.formatPnl(positions.snapshot()), this.mainKeyboard());
+          break;
+        case 'pause':
+          store.setPaused(true);
+          this.reply(chatId, '⏸️ Sniping en pause. (détection/alertes continuent)', this.mainKeyboard());
+          break;
+        case 'resume':
+          store.setPaused(false);
+          this.reply(chatId, '▶️ Sniping réactivé.', this.mainKeyboard());
+          break;
+        case 'dryrun_on':
+          store.setDryRun(true);
+          this.deps.config.dryRun = true;
+          this.reply(chatId, '🧪 DRY-RUN activé (simulation, aucune tx réelle).', this.mainKeyboard());
+          break;
+        case 'dryrun_off':
+          store.setDryRun(false);
+          this.deps.config.dryRun = false;
+          this.reply(
+            chatId,
+            this.deps.secrets.walletPrivateKey
+              ? '🔴 LIVE activé. ⚠️ Argent réel engagé.'
+              : '🔴 LIVE activé.\n⚠️ WALLET_PRIVATE_KEY manquant — LIVE ne pourra pas signer de tx.',
+            this.mainKeyboard(),
+          );
+          break;
+        case 'help_add':
+          this.reply(
+            chatId,
+            [
+              '➕ *Ajouter un wallet à suivre*',
+              '',
+              'Tape :',
+              '`/add <adresse> [label]`',
+              '',
+              'Exemple :',
+              '`/add 89oEJM4xL9Cqsmvd1o1imbyKTBa2BmPLbgbisTS9Hocy DevWallet`',
+              '',
+              'Le copy-trade est activé automatiquement sur ce wallet.',
+              'Pour retirer : `/remove <adresse>`',
+            ].join('\n'),
+          );
+          break;
+        default:
+          break;
       }
     });
   }
