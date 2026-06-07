@@ -65,6 +65,9 @@ export function loadSecrets(): Secrets {
     webhookAuthHeader: process.env.WEBHOOK_AUTH_HEADER ?? '',
     telegramBotToken: process.env.TELEGRAM_BOT_TOKEN ?? '',
     telegramAdminChatIds: adminIds,
+    openRouterApiKey: process.env.OPENROUTER_API_KEY ?? '',
+    openRouterModel:
+      process.env.OPENROUTER_MODEL ?? 'meta-llama/llama-3.3-70b-instruct:free',
   };
   return secrets;
 }

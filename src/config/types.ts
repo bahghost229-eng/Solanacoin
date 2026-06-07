@@ -140,4 +140,8 @@ export interface Secrets {
   telegramBotToken: string;
   /** Chat IDs admin autorisés à piloter le bot (séparés par des virgules dans .env). */
   telegramAdminChatIds: number[];
+  /** Clé API OpenRouter pour l'assistant IA (/ask). */
+  openRouterApiKey: string;
+  /** Modèle OpenRouter (défaut: un modèle gratuit). */
+  openRouterModel: string;
 }

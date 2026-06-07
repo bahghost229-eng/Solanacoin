@@ -36,6 +36,8 @@ import { Executor } from './execution/executor.js';
 import { PositionManager } from './positions/manager.js';
 import { ChainFollower } from './chain/chain-follower.js';
 import { DevPatternAnalyzer } from './chain/dev-pattern.js';
+import { CascadeTracer } from './chain/cascade-tracer.js';
+import { AiAssistant } from './ai/assistant.js';
 import { CopyTrader } from './copytrade/copy-trader.js';
 import { TelegramController } from './telegram/bot.js';
 import { Notifier } from './telegram/notifier.js';
@@ -86,6 +88,17 @@ async function main(): Promise<void> {
       ? new DevPatternAnalyzer(rpc, chain, config.devPattern)
       : null;
 
+  const cascade = new CascadeTracer(rpc);
+  const assistant = new AiAssistant({
+    secrets,
+    config,
+    store,
+    positions,
+    analyzer,
+    chain,
+    cascade,
+  });
+
   positions.start();
 
   // --- Wallet tracking (webhooks Helius), wallets dynamiques via Store ---
@@ -104,6 +117,7 @@ async function main(): Promise<void> {
     walletTracker,
     analyzer,
     chain,
+    assistant,
     onWalletsChanged: () => walletTracker?.setWallets(store.walletAddresses()),
   });
 

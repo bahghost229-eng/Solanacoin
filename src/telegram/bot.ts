@@ -25,6 +25,7 @@ import type { PositionManager } from '../positions/manager.js';
 import type { WalletTracker } from '../detection/wallet-tracker.js';
 import type { DevPatternAnalyzer } from '../chain/dev-pattern.js';
 import type { ChainFollower } from '../chain/chain-follower.js';
+import type { AiAssistant } from '../ai/assistant.js';
 import { Notifier } from './notifier.js';
 import { logger } from '../utils/logger.js';
 import { shortAddr } from '../utils/wallet.js';
@@ -40,6 +41,7 @@ export interface TelegramDeps {
   walletTracker: WalletTracker | null;
   analyzer: DevPatternAnalyzer | null;
   chain: ChainFollower | null;
+  assistant: AiAssistant | null;
   /** Appelé quand la liste des wallets change (pour resync le tracker). */
   onWalletsChanged: () => void;
 }
@@ -193,6 +195,7 @@ export class TelegramController {
           '/buyamount <sol> — montant par achat',
           '/analyze <wallet> — pattern de dev',
           '/chain <wallet> — chaîne de financement',
+          '/ask <question> — assistant IA (analyse on-chain)',
         ].join('\n'),
         this.mainKeyboard(),
       );
@@ -301,6 +304,27 @@ export class TelegramController {
       const chatId = m.chat.id;
       if (!guard(chatId)) return;
       this.reply(chatId, Notifier.formatPnl(positions.snapshot()), this.mainKeyboard());
+    });
+
+    bot.onText(/^\/ask\s+([\s\S]+)/, async (m, match) => {
+      const chatId = m.chat.id;
+      if (!guard(chatId)) return;
+      const question = (match?.[1] ?? '').trim();
+      if (!question) {
+        this.reply(chatId, 'ℹ️ Pose une question : `/ask analyse ce wallet <adresse>`');
+        return;
+      }
+      if (!this.deps.assistant || !this.deps.assistant.enabled) {
+        this.reply(chatId, '🤖 IA non configurée. Ajoute `OPENROUTER_API_KEY` dans les variables (openrouter.ai/keys, gratuit).');
+        return;
+      }
+      this.reply(chatId, '🤖 Réflexion en cours…');
+      try {
+        const answer = await this.deps.assistant.ask(question);
+        this.reply(chatId, answer, this.mainKeyboard());
+      } catch (e) {
+        this.reply(chatId, `❌ Erreur IA : ${(e as Error)?.message}`);
+      }
     });
 
     bot.onText(/^\/analyze\s+(\S+)/, async (m, match) => {
