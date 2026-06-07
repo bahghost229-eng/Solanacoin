@@ -1,0 +1,33 @@
+{
+  "name": "solana-chain-sniper",
+  "version": "1.0.0",
+  "description": "Bot Telegram de sniping Solana — détection Pump.fun, wallet tracking, chaîne de financement, pattern dev, copy-trade, anti-rug, exécution dry-run/live.",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node --enable-source-maps dist/index.js",
+    "dev": "tsx watch src/index.ts",
+    "bot": "tsx src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": ["solana", "pumpfun", "sniper", "memecoin", "telegram-bot", "copy-trade", "jito", "jupiter"],
+  "license": "MIT",
+  "dependencies": {
+    "@solana/spl-token": "^0.4.9",
+    "@solana/web3.js": "^1.95.4",
+    "bs58": "^6.0.0",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.1",
+    "node-telegram-bot-api": "^0.67.0",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.9.0",
+    "@types/node-telegram-bot-api": "^0.64.14",
+    "@types/ws": "^8.5.13",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3"
+  }
+}

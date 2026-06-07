@@ -1,0 +1,132 @@
+{
+  "//": "Paramètres NON sensibles. Les secrets (clés API, clé privée) vont dans .env",
+
+  "dryRun": true,
+  "//dryRun": "true = simulation, AUCUNE transaction réelle envoyée. Mettre false pour trader EN VRAI (risque de perte).",
+
+  "network": "mainnet-beta",
+
+  "detection": {
+    "enabled": true,
+    "source": "pumpfun",
+    "//source": "pumpfun = écoute les nouveaux mints du programme Pump.fun via Helius WS",
+    "filters": {
+      "minInitialLiquiditySol": 1.0,
+      "maxInitialLiquiditySol": 100,
+      "requireSocials": false,
+      "//requireSocials": "Si true, ignore les tokens sans liens sociaux (twitter/telegram/website)",
+      "ignoreMintsWithUpdateAuthority": false
+    }
+  },
+
+  "walletTracking": {
+    "enabled": true,
+    "//enabled": "Surveille des wallets de devs via les webhooks Helius",
+    "trackedWallets": [
+      "ExampleDevWallet1111111111111111111111111111",
+      "ExampleDevWallet2222222222222222222222222222"
+    ],
+    "action": "snipe",
+    "//action": "snipe = achète quand un wallet suivi crée/achète un token ; alert = log seulement"
+  },
+
+  "security": {
+    "enabled": true,
+    "requireMintAuthorityRevoked": true,
+    "requireFreezeAuthorityRevoked": true,
+    "maxDevHoldingPercent": 15,
+    "//maxDevHoldingPercent": "Rejette si le dev détient plus que ce % de l'offre",
+    "maxTopHolderPercent": 25,
+    "minHolders": 10,
+    "checkHoneypot": true,
+    "//checkHoneypot": "Simule une vente pour vérifier que le token est revendable",
+    "checkLiquidityLocked": true
+  },
+
+  "execution": {
+    "swapProvider": "jupiter",
+    "useJitoBundles": true,
+    "jitoTipLamports": 1000000,
+    "//jitoTipLamports": "Pourboire Jito en lamports (1 SOL = 1e9). 0.001 SOL = 1_000_000",
+    "priorityFeeMicroLamports": 500000,
+    "//priorityFeeMicroLamports": "Priority fee par unité de calcul (micro-lamports)",
+    "computeUnitLimit": 200000,
+    "buyAmountSol": 0.05,
+    "//buyAmountSol": "Montant d'achat par défaut par token (en SOL)",
+    "perTokenBuyAmountSol": {
+      "//": "Override du montant pour un mint précis: { \"<mint>\": 0.1 }"
+    },
+    "slippageBps": 1500,
+    "//slippageBps": "Slippage en basis points. 1500 = 15%",
+    "maxConcurrentPositions": 5,
+    "//maxConcurrentPositions": "Nombre max de positions ouvertes simultanément",
+    "buyTimeoutMs": 8000,
+    "maxRetries": 3
+  },
+
+  "positions": {
+    "takeProfit": [
+      { "gainPercent": 100, "sellPercent": 50 },
+      { "gainPercent": 300, "sellPercent": 50 }
+    ],
+    "//takeProfit": "Vend sellPercent de la position quand le gain atteint gainPercent",
+    "stopLossPercent": 40,
+    "//stopLossPercent": "Vend 100% si la perte atteint ce %",
+    "trailingStop": {
+      "enabled": true,
+      "activationGainPercent": 50,
+      "trailPercent": 20,
+      "//": "S'active après +50% ; vend si le prix retombe de 20% sous le plus haut"
+    },
+    "priceCheckIntervalMs": 3000,
+    "maxHoldTimeMinutes": 120,
+    "//maxHoldTimeMinutes": "Vente forcée après ce délai (0 = désactivé)"
+  },
+
+  "logging": {
+    "level": "info",
+    "//level": "debug | info | warn | error",
+    "logToFile": true,
+    "logFilePath": "data/bot.log"
+  },
+
+  "telegram": {
+    "enabled": true,
+    "//enabled": "Interface de pilotage + alertes via le bot Telegram (BotFather)",
+    "restrictToAdmins": true,
+    "//restrictToAdmins": "Si true, seuls les TELEGRAM_ADMIN_CHAT_IDS peuvent piloter le bot",
+    "alerts": true,
+    "//alerts": "Pousse les alertes temps réel (achat, vente, PnL, erreurs) aux admins"
+  },
+
+  "chainFollowing": {
+    "enabled": true,
+    "//enabled": "Remonte la chaîne de financement d'un wallet (qui finance qui)",
+    "maxHops": 5,
+    "//maxHops": "Profondeur max de remontée jusqu'au wallet mère",
+    "minTransferSol": 0.1,
+    "//minTransferSol": "Montant min (SOL) d'un transfert pour compter comme financement",
+    "maxTxPerWallet": 50,
+    "//maxTxPerWallet": "Nb max de transactions inspectées par wallet (perf/limites RPC)"
+  },
+
+  "devPattern": {
+    "enabled": true,
+    "//enabled": "Détection de patterns de devs (fresh wallet, funder commun, siblings)",
+    "freshWalletMaxTx": 5,
+    "//freshWalletMaxTx": "Wallet 'fresh' si <= N transactions au financement",
+    "minSuspicionScore": 50,
+    "//minSuspicionScore": "Score (0-100) à partir duquel un dev est marqué suspect"
+  },
+
+  "copyTrade": {
+    "enabled": true,
+    "//enabled": "Copie automatiquement les achats des wallets suivis (flag copyTrade)",
+    "copySells": false,
+    "//copySells": "Copie aussi les ventes (sinon achats seulement)",
+    "fixedBuyAmountSol": 0,
+    "//fixedBuyAmountSol": "Montant fixe par copy-buy (SOL). 0 = utilise execution.buyAmountSol",
+    "maxDelayMs": 5000,
+    "//maxDelayMs": "Délai max (ms) après détection pour exécuter la copie"
+  }
+}

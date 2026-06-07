@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.env
+config.json
+*.log
+data/trades.json
+data/positions.json
+.DS_Store
+data/store.json
