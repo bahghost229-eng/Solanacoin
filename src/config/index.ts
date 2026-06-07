@@ -67,7 +67,7 @@ export function loadSecrets(): Secrets {
     telegramAdminChatIds: adminIds,
     openRouterApiKey: process.env.OPENROUTER_API_KEY ?? '',
     openRouterModel:
-      process.env.OPENROUTER_MODEL ?? 'meta-llama/llama-3.3-70b-instruct:free',
+      process.env.OPENROUTER_MODEL ?? 'z-ai/glm-4.5-air:free',
   };
   return secrets;
 }

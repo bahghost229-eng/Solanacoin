@@ -153,7 +153,7 @@ export class AiAssistant {
     return (final?.choices?.[0]?.message?.content || '🤖 Analyse trop longue, réessaie plus précisément.').trim();
   }
 
-  private async call(messages: ChatMessage[], withTools = true): Promise<any> {
+  private async call(messages: ChatMessage[], withTools = true, retriesLeft = 1): Promise<any> {
     const { openRouterApiKey, openRouterModel } = this.deps.secrets;
     const body: any = {
       model: openRouterModel,
@@ -182,6 +182,29 @@ export class AiAssistant {
         // certains modèles gratuits ne supportent pas tools → retry sans
         if (withTools && (r.status === 404 || r.status === 400)) {
           return this.call(messages, false);
+        }
+        // rate-limit modèle free → backoff court puis 1 retry
+        if (r.status === 429 && retriesLeft > 0) {
+          let waitMs = 3000;
+          try {
+            const meta = JSON.parse(txt);
+            const ra = meta?.error?.metadata?.retry_after_seconds;
+            if (typeof ra === 'number') waitMs = Math.min(Math.ceil(ra) * 1000 + 500, 30000);
+          } catch {}
+          await new Promise((res) => setTimeout(res, waitMs));
+          return this.call(messages, withTools, retriesLeft - 1);
+        }
+        if (r.status === 429) {
+          return {
+            choices: [
+              {
+                message: {
+                  content:
+                    '🤖 Modèle IA gratuit saturé à l’instant (rate-limit). Réessaie dans ~30s, ou change `OPENROUTER_MODEL`.',
+                },
+              },
+            ],
+          };
         }
         return { choices: [{ message: { content: `🤖 Erreur OpenRouter ${r.status}.` } }] };
       }
